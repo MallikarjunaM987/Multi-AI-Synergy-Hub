@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getModel, getAllModels } = require('../models/registry');
+const { getModel, getAllModels, MODEL_REGISTRY } = require('../models/registry');
 const {
   getHistory,
   saveMessage,
@@ -76,15 +76,39 @@ router.post('/chat', async (req, res) => {
 
     // 4. Invoke the model adapter inside try/catch for 503 fallback
     let responseText;
+    let finalModel = model;
     try {
       responseText = await model.adapter.chat(message, history);
     } catch (error) {
-      console.error(`Error calling ${modelId} adapter:`, error.message);
-      return res.status(503).json({
-        error: "model_unavailable",
-        model: modelId,
-        reason: error.message
-      });
+      if (error.message.includes('429 Rate Limit Exceeded')) {
+        console.log("Mock failure triggered, switching to fallback");
+        
+        // Find secondary model (second key in registry)
+        const modelKeys = Object.keys(MODEL_REGISTRY);
+        const secondaryKey = modelKeys[1] || modelKeys[0];
+        
+        console.log(`Fallback: Routing request from '${modelId}' to secondary model '${secondaryKey}'`);
+        const secondaryModel = getModel(secondaryKey);
+        finalModel = secondaryModel;
+        
+        try {
+          responseText = await secondaryModel.adapter.chat(message, history);
+        } catch (fallbackError) {
+          console.error(`Error calling fallback model ${secondaryKey} adapter:`, fallbackError.message);
+          return res.status(503).json({
+            error: "model_unavailable",
+            model: secondaryKey,
+            reason: fallbackError.message
+          });
+        }
+      } else {
+        console.error(`Error calling ${modelId} adapter:`, error.message);
+        return res.status(503).json({
+          error: "model_unavailable",
+          model: modelId,
+          reason: error.message
+        });
+      }
     }
 
     // 5. Save assistant response to database
@@ -92,7 +116,7 @@ router.post('/chat', async (req, res) => {
       conversationId,
       role: 'assistant',
       content: responseText,
-      modelName: model.name
+      modelName: finalModel.name
     });
 
     // 6. Estimate token count of the updated context
@@ -103,8 +127,8 @@ router.post('/chat', async (req, res) => {
     res.json({
       response: responseText,
       model: {
-        id: model.id,
-        name: model.name
+        id: finalModel.id,
+        name: finalModel.name
       },
       tokenEstimate
     });

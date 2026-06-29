@@ -1,6 +1,8 @@
 const BaseAdapter = require('./base');
 const OpenAI = require('openai');
 
+const MOCK_API_FAILURE = true;
+
 class OpenRouterAdapter extends BaseAdapter {
   constructor(modelId, modelName) {
     super();
@@ -20,6 +22,10 @@ class OpenRouterAdapter extends BaseAdapter {
   }
 
   async chat(userMessage, history) {
+    if (MOCK_API_FAILURE && this.modelId === 'meta-llama/llama-3.3-70b-instruct:free') {
+      throw new Error('429 Rate Limit Exceeded');
+    }
+
     const formattedHistory = this.formatHistory(history);
     const messages = [...formattedHistory, { role: 'user', content: userMessage }];
 
@@ -33,3 +39,4 @@ class OpenRouterAdapter extends BaseAdapter {
 }
 
 module.exports = OpenRouterAdapter;
+

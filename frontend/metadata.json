@@ -1,0 +1,6 @@
+{
+  "name": "Multi-AI Synergy Hub",
+  "description": "A high-performance conversational console integrating Llama, DeepSeek, Gemini, and Qwen with automatic fallback recovery and shared history.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

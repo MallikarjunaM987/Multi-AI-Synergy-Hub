@@ -9,21 +9,21 @@ const MODEL_REGISTRY = {
     free: true,
     adapter: new OpenRouterAdapter('meta-llama/llama-3.3-70b-instruct:free', 'Llama 3.3')
   },
-  'deepseek-r1': {
-    id: 'deepseek-r1',
-    name: 'DeepSeek R1',
+  'openrouter-free': {
+    id: 'openrouter-free',
+    name: 'Auto Free Model',
     provider: 'OpenRouter',
     color: '#0055ff',
     free: true,
-    adapter: new OpenRouterAdapter('deepseek/deepseek-r1:free', 'DeepSeek R1')
+    adapter: new OpenRouterAdapter('openrouter/free', 'Auto Free Model')
   },
-  'gemini-flash': {
-    id: 'gemini-flash',
-    name: 'Gemini Flash',
+  'gemma-4': {
+    id: 'gemma-4',
+    name: 'Gemma 4 31B',
     provider: 'OpenRouter',
     color: '#1a73e8',
     free: true,
-    adapter: new OpenRouterAdapter('google/gemini-flash-1.5:free', 'Gemini Flash')
+    adapter: new OpenRouterAdapter('google/gemma-4-31b-it:free', 'Gemma 4 31B')
   },
   'qwen-3-coder': {
     id: 'qwen-3-coder',
