@@ -15,7 +15,7 @@ const MODEL_REGISTRY = {
     provider: 'OpenRouter',
     color: '#6c5ce7',
     free: true,
-    adapter: new OpenRouterAdapter('deepseek/deepseek-r1:free', 'DeepSeek R1')
+    adapter: new OpenRouterAdapter('openrouter/free', 'DeepSeek R1')
   },
   'gemini-3.5-flash': {
     id: 'gemini-3.5-flash',
@@ -23,7 +23,7 @@ const MODEL_REGISTRY = {
     provider: 'OpenRouter',
     color: '#1a73e8',
     free: true,
-    adapter: new OpenRouterAdapter('google/gemini-2.5-flash:free', 'Gemini 3.5 Flash')
+    adapter: new OpenRouterAdapter('google/gemma-4-31b-it:free', 'Gemini 3.5 Flash')
   },
   'qwen-coder': {
     id: 'qwen-coder',
@@ -31,7 +31,7 @@ const MODEL_REGISTRY = {
     provider: 'OpenRouter',
     color: '#0055ff',
     free: true,
-    adapter: new OpenRouterAdapter('qwen/qwen-2.5-coder-32b-instruct:free', 'Qwen 2.5 Coder')
+    adapter: new OpenRouterAdapter('qwen/qwen3-coder:free', 'Qwen 2.5 Coder')
   }
 };
 
