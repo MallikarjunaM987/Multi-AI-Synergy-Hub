@@ -3,35 +3,35 @@ const OpenRouterAdapter = require('../adapters/openrouter');
 const MODEL_REGISTRY = {
   'llama-3.3': {
     id: 'llama-3.3',
-    name: 'Llama 3.3',
+    name: 'Llama 3.3 70B',
     provider: 'OpenRouter',
     color: '#0455B1',
     free: true,
-    adapter: new OpenRouterAdapter('meta-llama/llama-3.3-70b-instruct:free', 'Llama 3.3')
+    adapter: new OpenRouterAdapter('meta-llama/llama-3.3-70b-instruct:free', 'Llama 3.3 70B')
   },
-  'openrouter-free': {
-    id: 'openrouter-free',
-    name: 'Auto Free Model',
-    provider: 'OpenRouter',
-    color: '#0055ff',
-    free: true,
-    adapter: new OpenRouterAdapter('openrouter/free', 'Auto Free Model')
-  },
-  'gemma-4': {
-    id: 'gemma-4',
-    name: 'Gemma 4 31B',
-    provider: 'OpenRouter',
-    color: '#1a73e8',
-    free: true,
-    adapter: new OpenRouterAdapter('google/gemma-4-31b-it:free', 'Gemma 4 31B')
-  },
-  'qwen-3-coder': {
-    id: 'qwen-3-coder',
-    name: 'Qwen 3 Coder',
+  'deepseek-r1': {
+    id: 'deepseek-r1',
+    name: 'DeepSeek R1',
     provider: 'OpenRouter',
     color: '#6c5ce7',
     free: true,
-    adapter: new OpenRouterAdapter('qwen/qwen3-coder:free', 'Qwen 3 Coder')
+    adapter: new OpenRouterAdapter('deepseek/deepseek-r1:free', 'DeepSeek R1')
+  },
+  'gemini-3.5-flash': {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
+    provider: 'OpenRouter',
+    color: '#1a73e8',
+    free: true,
+    adapter: new OpenRouterAdapter('google/gemini-2.5-flash:free', 'Gemini 3.5 Flash')
+  },
+  'qwen-coder': {
+    id: 'qwen-coder',
+    name: 'Qwen 2.5 Coder',
+    provider: 'OpenRouter',
+    color: '#0055ff',
+    free: true,
+    adapter: new OpenRouterAdapter('qwen/qwen-2.5-coder-32b-instruct:free', 'Qwen 2.5 Coder')
   }
 };
 

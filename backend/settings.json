@@ -1,0 +1,15 @@
+{
+  "credits": {
+    "llama-3.3": 5,
+    "deepseek-r1": 0.12,
+    "gemini-3.5-flash": 15,
+    "qwen-coder": 2.5
+  },
+  "modelStatus": {
+    "llama-3.3": "active",
+    "deepseek-r1": "active",
+    "gemini-3.5-flash": "active",
+    "qwen-coder": "active"
+  },
+  "autoFallbackEnabled": true
+}

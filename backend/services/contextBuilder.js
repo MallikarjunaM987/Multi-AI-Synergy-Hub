@@ -3,12 +3,12 @@ const pool = require('../db');
 /**
  * Fetches last 30 messages from the database ordered by created_at ascending.
  * @param {string} conversationId - UUID of the conversation.
- * @returns {Promise<Array<Object>>} List of messages.
+ * @returns {Promise<Array<Object>>} List of messages mapped to camelCase.
  */
 async function getHistory(conversationId) {
   const result = await pool.query(
     `SELECT * FROM (
-       SELECT id, conversation_id, role, content, model_name, created_at
+       SELECT id, conversation_id, role, content, model_name, model_id, was_fallback, fallback_from, thinking_time, reasoning, created_at
        FROM messages
        WHERE conversation_id = $1
        ORDER BY created_at DESC
@@ -17,32 +17,47 @@ async function getHistory(conversationId) {
      ORDER BY created_at ASC`,
     [conversationId]
   );
-  return result.rows;
+  return result.rows.map(row => ({
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    modelName: row.model_name,
+    modelId: row.model_id,
+    timestamp: new Date(row.created_at).getTime(),
+    wasFallback: row.was_fallback,
+    fallbackFrom: row.fallback_from,
+    thinkingTime: row.thinking_time ? parseFloat(row.thinking_time) : undefined,
+    reasoning: row.reasoning || undefined
+  }));
 }
 
 /**
- * Saves a single message to the messages table and touches the conversations updated_at timestamp.
- * @param {Object} params
- * @param {string} params.conversationId
- * @param {string} params.role - 'user' or 'assistant'
- * @param {string} params.content
- * @param {string} params.modelName - name or ID of the model (null for user messages or if not specified)
- * @returns {Promise<Object>} The saved message row.
+ * Saves a message to the messages table and touches the conversations updated_at timestamp.
  */
-async function saveMessage({ conversationId, role, content, modelName }) {
+async function saveMessage({ conversationId, role, content, modelName, modelId, wasFallback, fallbackFrom, thinkingTime, reasoning }) {
   const result = await pool.query(
-    `INSERT INTO messages (conversation_id, role, content, model_name)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO messages (conversation_id, role, content, model_name, model_id, was_fallback, fallback_from, thinking_time, reasoning)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
      RETURNING *`,
-    [conversationId, role, content, modelName || null]
+    [
+      conversationId,
+      role,
+      content,
+      modelName || null,
+      modelId || null,
+      wasFallback || false,
+      fallbackFrom || null,
+      thinkingTime || null,
+      reasoning || null
+    ]
   );
 
-  // Update conversation updated_at to bring it to the top
+  // Touch the updated_at timestamp on the conversation
   await pool.query(
     `UPDATE conversations
      SET updated_at = NOW()
      WHERE id = $1`,
-    [conversationId]
+     [conversationId]
   );
 
   return result.rows[0];
@@ -50,37 +65,38 @@ async function saveMessage({ conversationId, role, content, modelName }) {
 
 /**
  * Creates a new conversation and returns its UUID.
- * @param {string} title - The title of the conversation.
- * @returns {Promise<string>} The new conversation ID.
  */
-async function createConversation(title) {
+async function createConversation(title, activeModelId) {
   const result = await pool.query(
-    `INSERT INTO conversations (title)
-     VALUES ($1)
+    `INSERT INTO conversations (title, active_model_id)
+     VALUES ($1, $2)
      RETURNING id`,
-    [title || 'New Shared Conversation']
+    [title || 'New Shared Conversation', activeModelId || 'gemini-3.5-flash']
   );
   return result.rows[0].id;
 }
 
 /**
- * Returns all conversations ordered by updated_at descending.
- * @returns {Promise<Array<Object>>} List of conversations.
+ * Returns all conversations mapped as ChatSummary.
  */
 async function getAllConversations() {
   const result = await pool.query(
-    `SELECT id, title, created_at, updated_at
-     FROM conversations
-     ORDER BY updated_at DESC`
+    `SELECT c.id, c.title, c.active_model_id, c.created_at, c.updated_at,
+            (SELECT m.content FROM messages m WHERE m.conversation_id = c.id ORDER BY m.created_at DESC LIMIT 1) as last_message
+     FROM conversations c
+     ORDER BY c.updated_at DESC`
   );
-  return result.rows;
+  return result.rows.map(row => ({
+    id: row.id,
+    title: row.title,
+    activeModelId: row.active_model_id,
+    createdAt: new Date(row.created_at).getTime(),
+    lastMessage: row.last_message || 'Empty conversation'
+  }));
 }
 
 /**
- * Roughly estimates tokens (total characters divided by 4).
- * Supports both message array and direct string input.
- * @param {Array|string} input
- * @returns {number} Estimated token count.
+ * Roughly estimates tokens.
  */
 function estimateTokens(input) {
   if (typeof input === 'string') {
