@@ -23,7 +23,7 @@ const MODEL_REGISTRY = {
     provider: 'OpenRouter',
     color: '#1a73e8',
     free: true,
-    adapter: new OpenRouterAdapter('google/gemma-4-31b-it:free', 'Gemini 3.5 Flash')
+    adapter: new OpenRouterAdapter('meta-llama/llama-3.2-3b-instruct:free', 'Gemini 3.5 Flash')
   },
   'qwen-coder': {
     id: 'qwen-coder',

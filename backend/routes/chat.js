@@ -196,103 +196,91 @@ router.post('/chats/:id/messages', async (req, res) => {
     let fallbackOccurred = false;
     let fallbackDetails = null;
     let originalModelId = modelId;
+    let finalModel = getModel(modelId);
 
-    let model = getModel(modelId);
-    let isFailed = settings.modelStatus[modelId] === 'failed';
+    // Load available models and setup sequence looping
+    const modelKeys = Object.keys(MODEL_REGISTRY);
+    let attemptIndex = modelKeys.indexOf(modelId);
+    if (attemptIndex === -1) attemptIndex = 0;
+    
+    let attemptsCount = 0;
+    let responseText;
+    let thinkingTime = 0.5;
+    let reasoningText = undefined;
 
-    if (isFailed && settings.autoFallbackEnabled) {
-      const modelKeys = Object.keys(MODEL_REGISTRY);
-      const currentIndex = modelKeys.indexOf(modelId);
-      const nextIndex = (currentIndex + 1) % modelKeys.length;
-      const fallbackModelId = modelKeys[nextIndex];
+    while (attemptsCount < modelKeys.length) {
+      const currentAttemptModelId = modelKeys[attemptIndex];
+      const attemptModel = getModel(currentAttemptModelId);
       
-      console.log(`Model '${modelId}' status is 'failed'. Auto-fallback: switching to '${fallbackModelId}'`);
-      fallbackOccurred = true;
-      fallbackDetails = {
-        from: modelId,
-        to: fallbackModelId,
-        reason: `Model '${modelId}' status is flagged as failed in Control Panel.`
-      };
-      
-      modelId = fallbackModelId;
+      // Check if this model is flagged as 'failed' in settings and fallback is enabled
+      const isFailedInSettings = settings.modelStatus[currentAttemptModelId] === 'failed';
+      if (isFailedInSettings && settings.autoFallbackEnabled && attemptsCount < modelKeys.length - 1) {
+        console.log(`Model '${currentAttemptModelId}' is flagged as failed. Auto-fallback: skipping...`);
+        if (!fallbackOccurred) {
+          fallbackOccurred = true;
+          const nextModelId = modelKeys[(attemptIndex + 1) % modelKeys.length];
+          fallbackDetails = {
+            from: originalModelId,
+            to: nextModelId,
+            reason: `Model '${currentAttemptModelId}' status is flagged as failed in Control Panel.`
+          };
+        }
+        attemptIndex = (attemptIndex + 1) % modelKeys.length;
+        attemptsCount++;
+        continue;
+      }
+
+      console.log(`Attempting to generate response using model: ${currentAttemptModelId}`);
+      try {
+        const startTime = Date.now();
+        responseText = await attemptModel.adapter.chat(content, history);
+        thinkingTime = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
+        
+        if (currentAttemptModelId === 'deepseek-r1') {
+          reasoningText = "Analyzing user query...\nRetrieving context from PostgreSQL...\nProcessing fallback matrix...\nFormulating optimal response strategy.";
+        }
+        
+        finalModel = attemptModel;
+        modelId = currentAttemptModelId;
+        break; // Success! Exit loop.
+      } catch (error) {
+        console.error(`Error calling '${currentAttemptModelId}' adapter:`, error.message);
+        
+        if (settings.autoFallbackEnabled && attemptsCount < modelKeys.length - 1) {
+          fallbackOccurred = true;
+          const nextModelId = modelKeys[(attemptIndex + 1) % modelKeys.length];
+          fallbackDetails = {
+            from: currentAttemptModelId,
+            to: nextModelId,
+            reason: error.message
+          };
+          
+          // Save fallback event to DB
+          await pool.query(
+            `INSERT INTO fallback_events (conversation_id, failed_model_id, fallback_model_id, reason)
+             VALUES ($1, $2, $3, $4)`,
+            [id, currentAttemptModelId, nextModelId, error.message]
+          );
+
+          attemptIndex = (attemptIndex + 1) % modelKeys.length;
+          attemptsCount++;
+        } else {
+          // If fallback is disabled or we exhausted all models, fail the request
+          return res.status(503).json({
+            error: "model_unavailable",
+            model: currentAttemptModelId,
+            reason: error.message
+          });
+        }
+      }
+    }
+
+    // Update active model ID for the conversation in DB to match the successful model
+    if (modelId !== originalModelId) {
       await pool.query(
         `UPDATE conversations SET active_model_id = $1 WHERE id = $2`,
         [modelId, id]
       );
-      model = getModel(modelId);
-      
-      await pool.query(
-        `INSERT INTO fallback_events (conversation_id, failed_model_id, fallback_model_id, reason)
-         VALUES ($1, $2, $3, $4)`,
-        [id, originalModelId, fallbackModelId, fallbackDetails.reason]
-      );
-    }
-
-    // 6. Invoke model adapter
-    let responseText;
-    let thinkingTime = 0.5;
-    let reasoningText = undefined;
-    const startTime = Date.now();
-
-    try {
-      responseText = await model.adapter.chat(content, history);
-      thinkingTime = parseFloat(((Date.now() - startTime) / 1000).toFixed(2));
-      if (modelId === 'deepseek-r1') {
-        reasoningText = "Analyzing user query...\nRetrieving historical context from PostgreSQL...\nProcessing fallback matrix...\nFormulating optimal response strategy.";
-      }
-    } catch (error) {
-      console.error(`Error calling ${modelId} adapter:`, error.message);
-      
-      // Dynamic inline fallback on API error/429
-      if (settings.autoFallbackEnabled && !fallbackOccurred) {
-        const modelKeys = Object.keys(MODEL_REGISTRY);
-        const currentIndex = modelKeys.indexOf(modelId);
-        const nextIndex = (currentIndex + 1) % modelKeys.length;
-        const fallbackModelId = modelKeys[nextIndex];
-        
-        console.log(`API call error. Dynamic fallback: switching from '${modelId}' to '${fallbackModelId}'`);
-        fallbackOccurred = true;
-        fallbackDetails = {
-          from: modelId,
-          to: fallbackModelId,
-          reason: error.message
-        };
-        
-        modelId = fallbackModelId;
-        await pool.query(
-          `UPDATE conversations SET active_model_id = $1 WHERE id = $2`,
-          [modelId, id]
-        );
-        model = getModel(modelId);
-        
-        await pool.query(
-          `INSERT INTO fallback_events (conversation_id, failed_model_id, fallback_model_id, reason)
-           VALUES ($1, $2, $3, $4)`,
-          [id, originalModelId, fallbackModelId, error.message]
-        );
-
-        const fallbackStartTime = Date.now();
-        try {
-          responseText = await model.adapter.chat(content, history);
-          thinkingTime = parseFloat(((Date.now() - fallbackStartTime) / 1000).toFixed(2));
-          if (modelId === 'deepseek-r1') {
-            reasoningText = "Analyzing user query...\nEvaluating fallback path...\nGenerating final output...";
-          }
-        } catch (fallbackError) {
-          console.error(`Fallback model ${modelId} failed too:`, fallbackError.message);
-          return res.status(503).json({
-            error: "model_unavailable",
-            model: modelId,
-            reason: fallbackError.message
-          });
-        }
-      } else {
-        return res.status(503).json({
-          error: "model_unavailable",
-          model: modelId,
-          reason: error.message
-        });
-      }
     }
 
     // 7. Deduct credits
@@ -311,8 +299,8 @@ router.post('/chats/:id/messages', async (req, res) => {
       conversationId: id,
       role: 'assistant',
       content: responseText,
-      modelName: model.name,
-      modelId: model.id,
+      modelName: finalModel.name,
+      modelId: finalModel.id,
       wasFallback: fallbackOccurred,
       fallbackFrom: fallbackOccurred ? originalModelId : null,
       thinkingTime: thinkingTime,
